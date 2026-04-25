@@ -175,26 +175,28 @@
 </div>
 
 <script>
+  // Each page load gets a unique session → its own Durable Object instance
   const SESSION_ID = crypto.randomUUID();
   const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/agent?session=${SESSION_ID}`;
 
-  const chatEl  = document.getElementById('chat');
-  const inputEl = document.getElementById('msgInput');
-  const sendBtn = document.getElementById('sendBtn');
+  const chatEl   = document.getElementById('chat');
+  const inputEl  = document.getElementById('msgInput');
+  const sendBtn  = document.getElementById('sendBtn');
   const clearBtn = document.getElementById('clearBtn');
 
-  // Full UIMessage history sent to the server on each turn
+  // Conversation history sent to the server on every turn (full UIMessage array)
   let history = [];
 
-  // Streaming state
-  let streamEl  = null;
-  let streamTxt = '';
+  // Active streaming state
+  let streamEl  = null;  // the <div> currently being written into
+  let streamTxt = '';    // accumulated text for the current turn
 
-  // Typing indicator row
+  // Track which request we're waiting on so stale responses are ignored
+  let currentRequestId = null;
+
   let typingRow = null;
-
-  let ws = null;
-  let thinking = false;
+  let ws        = null;
+  let thinking  = false;
 
   // ── Render helpers ──────────────────────────────────────────────────────────
 
@@ -238,29 +240,40 @@
     ws.addEventListener('open', () => console.log('[ws] open', SESSION_ID));
 
     ws.addEventListener('message', ({ data }) => {
-      // Each frame may contain one or more newline-delimited parts
-      for (const raw of data.split('\n')) {
-        const line = raw.trim();
-        if (!line) continue;
+      let msg;
+      try { msg = JSON.parse(data); } catch { return; }
 
-        let part = null;
+      // The agents SDK wraps every stream chunk in cf_agent_use_chat_response.
+      // Ignore state-sync messages (cf_agent_state, cf_agent_chat_messages, etc.)
+      if (msg.type !== 'cf_agent_use_chat_response') return;
 
-        if (line.startsWith('{')) {
-          // NDJSON: {"type":"text-delta","textDelta":"..."}
-          try { part = JSON.parse(line); } catch {}
-        } else {
-          // Prefix-code stream: 0:"chunk"  /  d:{...}
-          const m = line.match(/^([0-9a-zA-Z]):([\s\S]+)$/);
-          if (m) {
-            try {
-              const [, code, payload] = m;
-              if (code === '0')              part = { type: 'text-delta', textDelta: JSON.parse(payload) };
-              else if (code === 'd' || code === 'e') part = { type: 'finish' };
-            } catch {}
-          }
+      // Ignore responses that don't belong to the current request
+      if (msg.id !== currentRequestId) return;
+
+      // Non-empty body carries a stream chunk — parse and render it
+      if (msg.body && msg.body.trim()) {
+        let chunk;
+        try { chunk = JSON.parse(msg.body); } catch { return; }
+
+        if (chunk.type === 'text-delta') {
+          hideTyping();
+          if (!streamEl) { streamEl = makeBubble('assistant', ''); streamTxt = ''; }
+          // AI SDK v6 uses `delta`, not `textDelta`
+          streamTxt += chunk.delta ?? '';
+          streamEl.textContent = streamTxt;
+          scroll();
         }
+      }
 
-        if (part) handlePart(part);
+      // done:true signals the stream is fully finished
+      if (msg.done) {
+        if (streamEl && streamTxt) {
+          history.push(uiMsg('assistant', streamTxt));
+        }
+        streamEl = null;
+        streamTxt = '';
+        currentRequestId = null;
+        setThinking(false);
       }
     });
 
@@ -272,34 +285,15 @@
     ws.addEventListener('error', (e) => console.error('[ws] error', e));
   }
 
-  function handlePart(part) {
-    if (part.type === 'text-delta') {
-      hideTyping();
-      if (!streamEl) { streamEl = makeBubble('assistant', ''); streamTxt = ''; }
-      streamTxt += part.textDelta;
-      streamEl.textContent = streamTxt;
-      scroll();
-
-    } else if (
-      part.type === 'finish' ||
-      part.type === 'step-finish' ||
-      part.type === 'finish-step'
-    ) {
-      if (streamEl && streamTxt) {
-        history.push(uiMsg('assistant', streamTxt));
-      }
-      streamEl = null;
-      streamTxt = '';
-      setThinking(false);
-    }
-    // Silently ignore: cf_agent_state, tool-call, annotations, etc.
-  }
-
   // ── Send ────────────────────────────────────────────────────────────────────
+
+  function shortId() {
+    return Math.random().toString(36).slice(2, 10);
+  }
 
   function uiMsg(role, text) {
     return {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: `msg_${Date.now()}_${shortId()}`,
       role,
       content: text,
       parts: [{ type: 'text', text }],
@@ -316,13 +310,24 @@
 
     makeBubble('user', text);
 
-    const msg = uiMsg('user', text);
-    history.push(msg);
-
+    history.push(uiMsg('user', text));
     streamEl = null;
     streamTxt = '';
 
-    ws.send(JSON.stringify({ type: 'cf_agent_use_chat_messages', messages: history }));
+    // Protocol: cf_agent_use_chat_request with body double-encoded as a JSON string
+    currentRequestId = shortId();
+    ws.send(JSON.stringify({
+      type: 'cf_agent_use_chat_request',
+      id: currentRequestId,
+      init: {
+        method: 'POST',
+        body: JSON.stringify({
+          messages: history,
+          trigger: 'submit-message',
+        }),
+      },
+    }));
+
     setThinking(true);
   }
 
@@ -350,8 +355,15 @@
     streamEl = null;
     streamTxt = '';
     typingRow = null;
+    currentRequestId = null;
     chatEl.innerHTML = '';
     setThinking(false);
+
+    // Tell the Durable Object to wipe its persisted message history
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'cf_agent_chat_clear' }));
+    }
+
     welcome();
   });
 
