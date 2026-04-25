@@ -7,6 +7,7 @@ declare namespace Cloudflare {
 	interface Env {
 		AI: Ai;
 		GTM_AGENT: DurableObjectNamespace<import("./src/server").GTMAgent>;
+		ASSETS: Fetcher;
 	}
 }
 interface Env extends Cloudflare.Env {}
