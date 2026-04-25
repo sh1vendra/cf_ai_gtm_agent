@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GTM Content Agent</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f0f0f;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: #111;
+      border-bottom: 1px solid #1e1e1e;
+    }
+
+    .header-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #f6821f;
+      letter-spacing: -0.01em;
+    }
+
+    .header-sub {
+      margin-top: 3px;
+      font-size: 0.7rem;
+      color: #555;
+    }
+
+    .clear-btn {
+      background: none;
+      border: 1px solid #2a2a2a;
+      color: #666;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .clear-btn:hover {
+      border-color: #f6821f;
+      color: #f6821f;
+    }
+
+    /* ── Chat feed ───────────────────────────────────────── */
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    #chat::-webkit-scrollbar { width: 4px; }
+    #chat::-webkit-scrollbar-track { background: transparent; }
+    #chat::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+    /* ── Bubbles ─────────────────────────────────────────── */
+    .row {
+      display: flex;
+    }
+
+    .row.user      { justify-content: flex-end; }
+    .row.assistant { justify-content: flex-start; }
+
+    .bubble {
+      max-width: 72%;
+      padding: 11px 15px;
+      font-size: 0.875rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .bubble.user {
+      background: #f6821f;
+      color: #fff;
+      border-radius: 14px 14px 4px 14px;
+    }
+
+    .bubble.assistant {
+      background: #1e1e1e;
+      color: #d0d0d0;
+      border: 1px solid #2a2a2a;
+      border-radius: 14px 14px 14px 4px;
+    }
+
+    .row.typing .bubble {
+      color: #555;
+      font-style: italic;
+    }
+
+    /* ── Input bar ───────────────────────────────────────── */
+    .input-area {
+      flex-shrink: 0;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      padding: 14px 24px;
+      background: #111;
+      border-top: 1px solid #1e1e1e;
+    }
+
+    textarea {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      padding: 10px 13px;
+      resize: none;
+      min-height: 42px;
+      max-height: 120px;
+      overflow-y: auto;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea::placeholder { color: #444; }
+    textarea:focus { border-color: #f6821f; }
+
+    .send-btn {
+      flex-shrink: 0;
+      background: #f6821f;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 600;
+      height: 42px;
+      padding: 0 18px;
+      transition: opacity 0.15s;
+    }
+
+    .send-btn:hover:not(:disabled) { opacity: 0.85; }
+    .send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-title">GTM Content Agent</div>
+    <div class="header-sub">Powered by Cloudflare Workers AI + Durable Objects</div>
+  </div>
+  <button class="clear-btn" id="clearBtn">Clear Session</button>
+</header>
+
+<div id="chat"></div>
+
+<div class="input-area">
+  <textarea id="msgInput" placeholder="Describe the content you need… (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
+  <button class="send-btn" id="sendBtn">Send</button>
+</div>
+
+<script>
+  const SESSION_ID = crypto.randomUUID();
+  const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/agent?session=${SESSION_ID}`;
+
+  const chatEl  = document.getElementById('chat');
+  const inputEl = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  // Full UIMessage history sent to the server on each turn
+  let history = [];
+
+  // Streaming state
+  let streamEl  = null;
+  let streamTxt = '';
+
+  // Typing indicator row
+  let typingRow = null;
+
+  let ws = null;
+  let thinking = false;
+
+  // ── Render helpers ──────────────────────────────────────────────────────────
+
+  function makeBubble(role, text) {
+    const row = document.createElement('div');
+    row.className = `row ${role}`;
+    const b = document.createElement('div');
+    b.className = `bubble ${role}`;
+    b.textContent = text;
+    row.appendChild(b);
+    chatEl.appendChild(row);
+    scroll();
+    return b;
+  }
+
+  function showTyping() {
+    if (typingRow) return;
+    typingRow = document.createElement('div');
+    typingRow.className = 'row assistant typing';
+    const b = document.createElement('div');
+    b.className = 'bubble assistant';
+    b.textContent = 'Agent is thinking…';
+    typingRow.appendChild(b);
+    chatEl.appendChild(typingRow);
+    scroll();
+  }
+
+  function hideTyping() {
+    if (typingRow) { typingRow.remove(); typingRow = null; }
+  }
+
+  function scroll() {
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  // ── WebSocket ───────────────────────────────────────────────────────────────
+
+  function connect() {
+    ws = new WebSocket(WS_URL);
+
+    ws.addEventListener('open', () => console.log('[ws] open', SESSION_ID));
+
+    ws.addEventListener('message', ({ data }) => {
+      // Each frame may contain one or more newline-delimited parts
+      for (const raw of data.split('\n')) {
+        const line = raw.trim();
+        if (!line) continue;
+
+        let part = null;
+
+        if (line.startsWith('{')) {
+          // NDJSON: {"type":"text-delta","textDelta":"..."}
+          try { part = JSON.parse(line); } catch {}
+        } else {
+          // Prefix-code stream: 0:"chunk"  /  d:{...}
+          const m = line.match(/^([0-9a-zA-Z]):([\s\S]+)$/);
+          if (m) {
+            try {
+              const [, code, payload] = m;
+              if (code === '0')              part = { type: 'text-delta', textDelta: JSON.parse(payload) };
+              else if (code === 'd' || code === 'e') part = { type: 'finish' };
+            } catch {}
+          }
+        }
+
+        if (part) handlePart(part);
+      }
+    });
+
+    ws.addEventListener('close', () => {
+      ws = null;
+      setTimeout(connect, 2000);
+    });
+
+    ws.addEventListener('error', (e) => console.error('[ws] error', e));
+  }
+
+  function handlePart(part) {
+    if (part.type === 'text-delta') {
+      hideTyping();
+      if (!streamEl) { streamEl = makeBubble('assistant', ''); streamTxt = ''; }
+      streamTxt += part.textDelta;
+      streamEl.textContent = streamTxt;
+      scroll();
+
+    } else if (
+      part.type === 'finish' ||
+      part.type === 'step-finish' ||
+      part.type === 'finish-step'
+    ) {
+      if (streamEl && streamTxt) {
+        history.push(uiMsg('assistant', streamTxt));
+      }
+      streamEl = null;
+      streamTxt = '';
+      setThinking(false);
+    }
+    // Silently ignore: cf_agent_state, tool-call, annotations, etc.
+  }
+
+  // ── Send ────────────────────────────────────────────────────────────────────
+
+  function uiMsg(role, text) {
+    return {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      role,
+      content: text,
+      parts: [{ type: 'text', text }],
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  function send() {
+    const text = inputEl.value.trim();
+    if (!text || thinking || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+
+    makeBubble('user', text);
+
+    const msg = uiMsg('user', text);
+    history.push(msg);
+
+    streamEl = null;
+    streamTxt = '';
+
+    ws.send(JSON.stringify({ type: 'cf_agent_use_chat_messages', messages: history }));
+    setThinking(true);
+  }
+
+  function setThinking(val) {
+    thinking = val;
+    sendBtn.disabled = val;
+    val ? showTyping() : hideTyping();
+  }
+
+  // ── Controls ────────────────────────────────────────────────────────────────
+
+  sendBtn.addEventListener('click', send);
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  });
+
+  clearBtn.addEventListener('click', () => {
+    history = [];
+    streamEl = null;
+    streamTxt = '';
+    typingRow = null;
+    chatEl.innerHTML = '';
+    setThinking(false);
+    welcome();
+  });
+
+  // ── Welcome ─────────────────────────────────────────────────────────────────
+
+  const WELCOME = `Welcome! I help B2B tech sales and marketing teams produce three types of go-to-market content:
+
+1. Technical Case Study — Problem → Solution → Measurable Outcome. Every claim is backed by a specific metric or named proof point.
+
+2. Sales Enablement Brief — Positioning (why this product wins), Objection Handling (top 3–5 objections with evidence-backed responses), and Competitive Angles vs. named or category competitors.
+
+3. Event Messaging — A keynote hook (≤10 words), session descriptions (150-word max, outcome-first), and a 3-email follow-up arc: recap → value add → CTA.
+
+Before I write anything I'll confirm your target audience, the product or feature being positioned, and the desired outcome. What would you like to create?`;
+
+  function welcome() {
+    makeBubble('assistant', WELCOME);
+  }
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  welcome();
+  connect();
+</script>
+
+</body>
+</html>
