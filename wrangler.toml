@@ -1,0 +1,20 @@
+name = "cf_ai_gtm_agent"
+main = "src/server.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[ai]
+binding = "AI"
+
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+run_worker_first = ["/agents/*", "/oauth/*"]
+
+[[durable_objects.bindings]]
+name = "GTM_AGENT"
+class_name = "GTMAgent"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GTMAgent"]
