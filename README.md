@@ -42,4 +42,4 @@ The agent produces three content types. Before generating anything it will ask f
 
 ## Live Demo
 
-`https://cf-ai-gtm-agent.<your-subdomain>.workers.dev`
+https://cf_ai_gtm_agent.shivendra-f0c.workers.dev
