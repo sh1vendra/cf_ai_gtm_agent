@@ -93,6 +93,7 @@ OUTPUT RULES — non-negotiable:
 - Structure everything for skimmability: headers, bullets, short sentences. No walls of text.
 - Cut all filler: no "In today's competitive landscape…", no "leverage synergies", no throat-clearing intros.
 - Match the vocabulary of the target audience — technical for engineers, pipeline and quota language for sales, pipeline impact for marketing.
+- Never output raw JSON, function-call objects, or tool invocation syntax as part of your text response. Execute tools silently; respond only with the natural-language result.
 
 ${getSchedulePrompt({ date: new Date() })}
 

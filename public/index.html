@@ -256,10 +256,16 @@
         try { chunk = JSON.parse(msg.body); } catch { return; }
 
         if (chunk.type === 'text-delta') {
+          const delta = chunk.delta ?? '';
+          if (!delta) return;
+          streamTxt += delta;
+          // Suppress rendering while the accumulated text might be a raw function-call
+          // JSON emitted by the model (e.g. {"type":"function","name":"...","parameters":{}}).
+          // Once the text grows past 512 chars it can't be a compact invocation object.
+          const leading = streamTxt.trimStart();
+          if (leading.startsWith('{') && leading.length <= 512) return;
           hideTyping();
-          if (!streamEl) { streamEl = makeBubble('assistant', ''); streamTxt = ''; }
-          // AI SDK v6 uses `delta`, not `textDelta`
-          streamTxt += chunk.delta ?? '';
+          if (!streamEl) { streamEl = makeBubble('assistant', ''); }
           streamEl.textContent = streamTxt;
           scroll();
         }
@@ -267,7 +273,23 @@
 
       // done:true signals the stream is fully finished
       if (msg.done) {
-        if (streamEl && streamTxt) {
+        const t = streamTxt.trim();
+        // Detect a raw tool-invocation object the model leaked into the text stream.
+        let isRawToolCall = false;
+        if (t.startsWith('{')) {
+          try {
+            const p = JSON.parse(t);
+            isRawToolCall = typeof p.name === 'string' &&
+              (p.type === 'function' || p.parameters !== undefined);
+          } catch {}
+        }
+
+        if (isRawToolCall) {
+          // Remove the bubble if it was created before we could detect the pattern
+          streamEl?.closest('.row')?.remove();
+        } else if (streamTxt) {
+          // Text was buffered (started with '{') but is valid content — show it now
+          if (!streamEl) streamEl = makeBubble('assistant', streamTxt);
           history.push(uiMsg('assistant', streamTxt));
         }
         streamEl = null;
