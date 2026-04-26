@@ -4,6 +4,9 @@ An AI-powered GTM content generation agent built on Cloudflare's edge infrastruc
 
 **[Live Demo → cf_ai_gtm_agent.shivendra-f0c.workers.dev](https://cf_ai_gtm_agent.shivendra-f0c.workers.dev)**
 
+![Case study generation](assets/screenshot-1.png)
+![Sales brief and event messaging](assets/screenshot-2.png)
+
 ## The Problem
 
 GTM teams at B2B tech companies spend hours manually writing case studies, sales briefs, and event content. The output is inconsistent, slow to produce, and rarely reused effectively. This project automates that workflow using a conversational AI agent that understands GTM context and produces structured, metric-driven content on demand.
