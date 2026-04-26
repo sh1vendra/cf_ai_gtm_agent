@@ -456,12 +456,25 @@
       const h1 = line.match(/^# (.+)/);
       if (h1) { out.push(`<h1>${inline(h1[1])}</h1>`); i++; continue; }
 
-      // Unordered list
+      // Unordered list — tolerates blank lines between items
       if (/^[*\-] /.test(line)) {
         const items = [];
-        while (i < lines.length && /^[*\-] /.test(lines[i])) {
-          items.push(`<li>${inline(lines[i].replace(/^[*\-] /, ''))}</li>`);
-          i++;
+        while (i < lines.length) {
+          const l = lines[i];
+          if (/^[*\-] /.test(l)) {
+            items.push(`<li>${inline(l.replace(/^[*\-] /, ''))}</li>`);
+            i++;
+          } else if (!l.trim()) {
+            let peek = i + 1;
+            while (peek < lines.length && !lines[peek].trim()) peek++;
+            if (peek < lines.length && /^[*\-] /.test(lines[peek])) {
+              i = peek;
+            } else {
+              break;
+            }
+          } else {
+            break;
+          }
         }
         out.push(`<ul>${items.join('')}</ul>`);
         continue;
