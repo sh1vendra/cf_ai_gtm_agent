@@ -1,5 +1,5 @@
 import { createWorkersAI } from "workers-ai-provider";
-import { callable, type Schedule } from "agents";
+import { callable, routeAgentRequest, type Schedule } from "agents";
 import { getSchedulePrompt, scheduleSchema } from "agents/schedule";
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
@@ -243,22 +243,8 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
 
 export default {
   async fetch(request: Request, env: Env) {
-    const url = new URL(request.url);
-
-    if (request.method === "GET" && url.pathname === "/") {
-      return env.ASSETS.fetch(request);
-    }
-
-    if (url.pathname === "/agent") {
-      if (request.headers.get("Upgrade") !== "websocket") {
-        return new Response("Expected WebSocket upgrade", { status: 426 });
-      }
-      const session = url.searchParams.get("session") ?? "default";
-      const id = env.GTM_AGENT.idFromName(session);
-      const stub = env.GTM_AGENT.get(id);
-      return stub.fetch(request);
-    }
-
-    return new Response("Not found", { status: 404 });
+    const agentResponse = await routeAgentRequest(request, env);
+    if (agentResponse) return agentResponse;
+    return env.ASSETS.fetch(request);
   }
 } satisfies ExportedHandler<Env>;

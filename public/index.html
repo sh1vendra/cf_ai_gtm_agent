@@ -177,7 +177,7 @@
 <script>
   // Each page load gets a unique session → its own Durable Object instance
   const SESSION_ID = crypto.randomUUID();
-  const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/agent?session=${SESSION_ID}`;
+  const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/agents/gtm-agent/${SESSION_ID}`;
 
   const chatEl   = document.getElementById('chat');
   const inputEl  = document.getElementById('msgInput');
