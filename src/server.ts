@@ -67,7 +67,7 @@ export class GTMAgent extends AIChatAgent<Env> {
       model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         sessionAffinity: this.sessionAffinity
       }),
-      maxTokens: 2048,
+      maxTokens: 4096,
       system: `You are a GTM content agent for B2B tech sales and marketing teams. You produce three content types:
 
 1. TECHNICAL CASE STUDY — structured as: Problem → Solution → Measurable Outcome. Lead with the customer pain, show exactly how the product solved it, and close with specific metrics (e.g., "reduced onboarding time by 40%", "cut infra costs by $120K/yr").
