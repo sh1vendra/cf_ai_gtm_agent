@@ -237,20 +237,30 @@
   function connect() {
     ws = new WebSocket(WS_URL);
 
-    ws.addEventListener('open', () => console.log('[ws] open', SESSION_ID));
+    ws.addEventListener('open', () => {
+      console.log('[ws] connected', { url: WS_URL, session: SESSION_ID });
+    });
 
     ws.addEventListener('message', ({ data }) => {
+      // Log every raw frame so we can see exactly what the server sends
       let msg;
-      try { msg = JSON.parse(data); } catch { return; }
+      try {
+        msg = JSON.parse(data);
+      } catch {
+        console.warn('[ws] non-JSON frame:', data);
+        return;
+      }
+      console.log('[ws] message type=%s id=%s done=%s body=%s',
+        msg.type, msg.id ?? '-', msg.done ?? '-',
+        msg.body ? msg.body.slice(0, 120) : '(none)');
 
-      // The agents SDK wraps every stream chunk in cf_agent_use_chat_response.
-      // Ignore state-sync messages (cf_agent_state, cf_agent_chat_messages, etc.)
       if (msg.type !== 'cf_agent_use_chat_response') return;
 
-      // Ignore responses that don't belong to the current request
-      if (msg.id !== currentRequestId) return;
+      if (msg.id !== currentRequestId) {
+        console.log('[ws] skipping — id mismatch (got %s, want %s)', msg.id, currentRequestId);
+        return;
+      }
 
-      // Non-empty body carries a stream chunk — parse and render it
       if (msg.body && msg.body.trim()) {
         let chunk;
         try { chunk = JSON.parse(msg.body); } catch { return; }
@@ -259,9 +269,6 @@
           const delta = chunk.delta ?? '';
           if (!delta) return;
           streamTxt += delta;
-          // Suppress rendering while the accumulated text might be a raw function-call
-          // JSON emitted by the model (e.g. {"type":"function","name":"...","parameters":{}}).
-          // Once the text grows past 512 chars it can't be a compact invocation object.
           const leading = streamTxt.trimStart();
           if (leading.startsWith('{') && leading.length <= 512) return;
           hideTyping();
@@ -271,10 +278,9 @@
         }
       }
 
-      // done:true signals the stream is fully finished
       if (msg.done) {
+        console.log('[ws] stream done — final text length:', streamTxt.length);
         const t = streamTxt.trim();
-        // Detect a raw tool-invocation object the model leaked into the text stream.
         let isRawToolCall = false;
         if (t.startsWith('{')) {
           try {
@@ -285,10 +291,9 @@
         }
 
         if (isRawToolCall) {
-          // Remove the bubble if it was created before we could detect the pattern
+          console.log('[ws] suppressed raw tool-call text:', t.slice(0, 200));
           streamEl?.closest('.row')?.remove();
         } else if (streamTxt) {
-          // Text was buffered (started with '{') but is valid content — show it now
           if (!streamEl) streamEl = makeBubble('assistant', streamTxt);
           history.push(uiMsg('assistant', streamTxt));
         }
@@ -299,7 +304,8 @@
       }
     });
 
-    ws.addEventListener('close', () => {
+    ws.addEventListener('close', (e) => {
+      console.log('[ws] closed — code=%d reason=%s clean=%s', e.code, e.reason || '(none)', e.wasClean);
       ws = null;
       setTimeout(connect, 2000);
     });
