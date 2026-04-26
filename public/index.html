@@ -4,208 +4,491 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GTM Content Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* ── Theme tokens ───────────────────────────────────────── */
+    :root {
+      --bg:           #ffffff;
+      --bg-elevated:  #ffffff;
+      --bg-chat:      #f7f7f8;
+      --bg-user:      #f6821f;
+      --bg-assistant: #f5f5f5;
+      --text:         #1a1a1a;
+      --text-muted:   #6b7280;
+      --text-user:    #ffffff;
+      --text-asst:    #1a1a1a;
+      --border:       #e5e5e5;
+      --accent:       #f6821f;
+      --shadow-sm:    0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-input: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    html.dark {
+      --bg:           #0f0f0f;
+      --bg-elevated:  #111111;
+      --bg-chat:      #0a0a0a;
+      --bg-assistant: #1c1c1c;
+      --text:         #e5e5e5;
+      --text-muted:   #71717a;
+      --text-asst:    #d4d4d4;
+      --border:       #2a2a2a;
+      --shadow-sm:    0 1px 3px rgba(0,0,0,0.5);
+      --shadow-input: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    /* ── Base ───────────────────────────────────────────────── */
     body {
-      background: #0f0f0f;
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-chat);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
       height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      transition: background 0.18s, color 0.18s;
     }
 
-    /* ── Header ─────────────────────────────────────────── */
+    /* ── Header ─────────────────────────────────────────────── */
     header {
       flex-shrink: 0;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 14px 24px;
-      background: #111;
-      border-bottom: 1px solid #1e1e1e;
+      gap: 16px;
+      padding: 0 20px 0 0;
+      height: 58px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      box-shadow: var(--shadow-sm);
+      transition: background 0.18s, border-color 0.18s;
     }
 
+    .header-wordmark {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 20px;
+      border-right: 1px solid var(--border);
+      height: 100%;
+    }
+
+    .header-info { flex: 1; min-width: 0; }
+
     .header-title {
-      font-size: 1rem;
+      font-size: 0.9375rem;
       font-weight: 700;
-      color: #f6821f;
-      letter-spacing: -0.01em;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .header-sub {
-      margin-top: 3px;
-      font-size: 0.7rem;
-      color: #555;
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
     }
 
-    .clear-btn {
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn-ghost {
       background: none;
-      border: 1px solid #2a2a2a;
-      color: #666;
-      padding: 6px 14px;
-      border-radius: 6px;
-      font-size: 0.78rem;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 5px 11px;
+      border-radius: 7px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 500;
       cursor: pointer;
       transition: border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+      line-height: 1;
     }
 
-    .clear-btn:hover {
-      border-color: #f6821f;
-      color: #f6821f;
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    #darkToggle { font-size: 0.9rem; padding: 5px 9px; }
+
+    /* ── Content-type pills ──────────────────────────────────── */
+    .pills-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 20px;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
     }
 
-    /* ── Chat feed ───────────────────────────────────────── */
+    .pills-bar::-webkit-scrollbar { display: none; }
+
+    .pills-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+      margin-right: 2px;
+    }
+
+    .pill {
+      flex-shrink: 0;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 13px;
+      border-radius: 20px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .pill:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Chat feed ───────────────────────────────────────────── */
     #chat {
       flex: 1;
       overflow-y: auto;
-      padding: 28px 24px;
+      padding: 22px 20px 12px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
     }
 
-    #chat::-webkit-scrollbar { width: 4px; }
+    #chat::-webkit-scrollbar { width: 5px; }
     #chat::-webkit-scrollbar-track { background: transparent; }
-    #chat::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+    #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-    /* ── Bubbles ─────────────────────────────────────────── */
-    .row {
-      display: flex;
-    }
-
+    /* ── Rows & Bubbles ──────────────────────────────────────── */
+    .row { display: flex; }
     .row.user      { justify-content: flex-end; }
     .row.assistant { justify-content: flex-start; }
 
     .bubble {
-      max-width: 72%;
-      padding: 11px 15px;
+      max-width: 74%;
+      padding: 10px 14px;
       font-size: 0.875rem;
       line-height: 1.65;
-      white-space: pre-wrap;
       word-break: break-word;
     }
 
     .bubble.user {
-      background: #f6821f;
-      color: #fff;
-      border-radius: 14px 14px 4px 14px;
+      background: var(--bg-user);
+      color: var(--text-user);
+      border-radius: 18px 18px 4px 18px;
+      white-space: pre-wrap;
     }
 
     .bubble.assistant {
-      background: #1e1e1e;
-      color: #d0d0d0;
-      border: 1px solid #2a2a2a;
-      border-radius: 14px 14px 14px 4px;
+      background: var(--bg-assistant);
+      color: var(--text-asst);
+      border: 1px solid var(--border);
+      border-radius: 18px 18px 18px 4px;
+      box-shadow: var(--shadow-sm);
+      transition: background 0.18s, border-color 0.18s;
     }
 
-    .row.typing .bubble {
-      color: #555;
+    /* Raw text shown during streaming */
+    .bubble.assistant.streaming { white-space: pre-wrap; }
+
+    .row.typing .bubble.assistant {
+      color: var(--text-muted);
       font-style: italic;
     }
 
-    /* ── Input bar ───────────────────────────────────────── */
+    /* ── Markdown inside assistant bubbles ───────────────────── */
+    .bubble.assistant h1,
+    .bubble.assistant h2,
+    .bubble.assistant h3 {
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+      margin: 0.85em 0 0.3em;
+    }
+
+    .bubble.assistant h1:first-child,
+    .bubble.assistant h2:first-child,
+    .bubble.assistant h3:first-child { margin-top: 0; }
+
+    .bubble.assistant h1 { font-size: 1.05em; }
+
+    .bubble.assistant h2 {
+      font-size: 1em;
+      padding-bottom: 0.2em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .bubble.assistant h3 { font-size: 0.9375em; }
+
+    .bubble.assistant p { margin: 0 0 0.55em; }
+    .bubble.assistant p:last-child { margin-bottom: 0; }
+
+    .bubble.assistant ul,
+    .bubble.assistant ol {
+      margin: 0.3em 0;
+      padding-left: 1.4em;
+    }
+
+    .bubble.assistant li { margin: 0.2em 0; }
+
+    .bubble.assistant strong { font-weight: 600; }
+    .bubble.assistant em     { font-style: italic; }
+
+    .bubble.assistant code {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace;
+      font-size: 0.82em;
+      background: rgba(0,0,0,0.06);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    html.dark .bubble.assistant code { background: rgba(255,255,255,0.09); }
+
+    /* ── Input area ──────────────────────────────────────────── */
     .input-area {
       flex-shrink: 0;
+      padding: 10px 20px 14px;
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border);
+      transition: background 0.18s;
+    }
+
+    .input-row {
       display: flex;
       gap: 10px;
       align-items: flex-end;
-      padding: 14px 24px;
-      background: #111;
-      border-top: 1px solid #1e1e1e;
+      background: var(--bg-chat);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      padding: 6px 6px 6px 16px;
+      box-shadow: var(--shadow-input);
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.18s;
+    }
+
+    .input-row:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(246,130,31,0.13), var(--shadow-input);
     }
 
     textarea {
       flex: 1;
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 8px;
-      color: #e0e0e0;
+      background: transparent;
+      border: none;
+      color: var(--text);
       font-family: inherit;
       font-size: 0.875rem;
       line-height: 1.5;
-      padding: 10px 13px;
+      padding: 4px 0;
       resize: none;
-      min-height: 42px;
+      min-height: 26px;
       max-height: 120px;
       overflow-y: auto;
       outline: none;
-      transition: border-color 0.15s;
     }
 
-    textarea::placeholder { color: #444; }
-    textarea:focus { border-color: #f6821f; }
+    textarea::placeholder { color: var(--text-muted); }
 
     .send-btn {
       flex-shrink: 0;
-      background: #f6821f;
+      background: var(--accent);
       border: none;
-      border-radius: 8px;
+      border-radius: 20px;
       color: #fff;
       cursor: pointer;
       font-family: inherit;
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       font-weight: 600;
-      height: 42px;
-      padding: 0 18px;
-      transition: opacity 0.15s;
+      height: 34px;
+      padding: 0 17px;
+      transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
     }
 
-    .send-btn:hover:not(:disabled) { opacity: 0.85; }
+    .send-btn:hover:not(:disabled) { opacity: 0.88; }
+    .send-btn:active:not(:disabled) { transform: scale(0.96); }
     .send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <div class="header-title">GTM Content Agent</div>
-    <div class="header-sub">Powered by Cloudflare Workers AI + Durable Objects</div>
+  <div class="header-wordmark">
+    <div class="header-info">
+      <div class="header-title">GTM Content Agent</div>
+      <div class="header-sub">Powered by Workers AI + Durable Objects</div>
+    </div>
   </div>
-  <button class="clear-btn" id="clearBtn">Clear Session</button>
+  <div class="header-actions" style="margin-left:auto">
+    <button class="btn-ghost" id="darkToggle" title="Toggle dark mode">☾</button>
+    <button class="btn-ghost" id="clearBtn">Clear</button>
+  </div>
 </header>
+
+<div class="pills-bar">
+  <span class="pills-label">Quick start</span>
+  <button class="pill" data-starter="case-study">Case Study</button>
+  <button class="pill" data-starter="sales-brief">Sales Brief</button>
+  <button class="pill" data-starter="event-messaging">Event Messaging</button>
+</div>
 
 <div id="chat"></div>
 
 <div class="input-area">
-  <textarea id="msgInput" placeholder="Describe the content you need… (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
-  <button class="send-btn" id="sendBtn">Send</button>
+  <div class="input-row">
+    <textarea id="msgInput" placeholder="Describe the content you need… (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
+    <button class="send-btn" id="sendBtn">Send</button>
+  </div>
 </div>
 
 <script>
-  // Each page load gets a unique session → its own Durable Object instance
+  // ── Session ──────────────────────────────────────────────────────────────────
+
   const SESSION_ID = crypto.randomUUID();
   const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/agents/gtm-agent/${SESSION_ID}`;
 
-  const chatEl   = document.getElementById('chat');
-  const inputEl  = document.getElementById('msgInput');
-  const sendBtn  = document.getElementById('sendBtn');
-  const clearBtn = document.getElementById('clearBtn');
+  const chatEl    = document.getElementById('chat');
+  const inputEl   = document.getElementById('msgInput');
+  const sendBtn   = document.getElementById('sendBtn');
+  const clearBtn  = document.getElementById('clearBtn');
+  const darkToggle = document.getElementById('darkToggle');
 
-  // Conversation history sent to the server on every turn (full UIMessage array)
   let history = [];
-
-  // Active streaming state
-  let streamEl  = null;  // the <div> currently being written into
-  let streamTxt = '';    // accumulated text for the current turn
-
-  // Track which request we're waiting on so stale responses are ignored
+  let streamEl  = null;
+  let streamTxt = '';
   let currentRequestId = null;
-
   let typingRow = null;
   let ws        = null;
   let thinking  = false;
 
-  // ── Render helpers ──────────────────────────────────────────────────────────
+  // ── Dark mode ────────────────────────────────────────────────────────────────
+
+  function applyDark(on) {
+    document.documentElement.classList.toggle('dark', on);
+    darkToggle.textContent = on ? '☀' : '☾';
+    darkToggle.title = on ? 'Switch to light mode' : 'Switch to dark mode';
+    localStorage.setItem('cf-gtm-theme', on ? 'dark' : 'light');
+  }
+
+  darkToggle.addEventListener('click', () => {
+    applyDark(!document.documentElement.classList.contains('dark'));
+  });
+
+  applyDark(localStorage.getItem('cf-gtm-theme') === 'dark');
+
+  // ── Markdown renderer ────────────────────────────────────────────────────────
+
+  function renderMarkdown(raw) {
+    if (!raw) return '';
+
+    function escHtml(s) {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function inline(s) {
+      return escHtml(s)
+        .replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*\n]+)\*/g,   '<em>$1</em>')
+        .replace(/`([^`\n]+)`/g,     '<code>$1</code>');
+    }
+
+    const out   = [];
+    const lines = raw.split('\n');
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // Blank line — block separator
+      if (!line.trim()) { i++; continue; }
+
+      // Headings
+      const h3 = line.match(/^### (.+)/);
+      if (h3) { out.push(`<h3>${inline(h3[1])}</h3>`); i++; continue; }
+
+      const h2 = line.match(/^## (.+)/);
+      if (h2) { out.push(`<h2>${inline(h2[1])}</h2>`); i++; continue; }
+
+      const h1 = line.match(/^# (.+)/);
+      if (h1) { out.push(`<h1>${inline(h1[1])}</h1>`); i++; continue; }
+
+      // Unordered list
+      if (/^[*\-] /.test(line)) {
+        const items = [];
+        while (i < lines.length && /^[*\-] /.test(lines[i])) {
+          items.push(`<li>${inline(lines[i].replace(/^[*\-] /, ''))}</li>`);
+          i++;
+        }
+        out.push(`<ul>${items.join('')}</ul>`);
+        continue;
+      }
+
+      // Ordered list
+      if (/^\d+\. /.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\d+\. /.test(lines[i])) {
+          items.push(`<li>${inline(lines[i].replace(/^\d+\. /, ''))}</li>`);
+          i++;
+        }
+        out.push(`<ol>${items.join('')}</ol>`);
+        continue;
+      }
+
+      // Paragraph — collect consecutive non-block lines
+      const para = [];
+      while (i < lines.length) {
+        const l = lines[i];
+        if (!l.trim()) break;
+        if (/^#{1,3} /.test(l) || /^[*\-] /.test(l) || /^\d+\. /.test(l)) break;
+        para.push(inline(l));
+        i++;
+      }
+      if (para.length) out.push(`<p>${para.join('<br>')}</p>`);
+    }
+
+    return out.join('');
+  }
+
+  // ── Render helpers ───────────────────────────────────────────────────────────
 
   function makeBubble(role, text) {
     const row = document.createElement('div');
     row.className = `row ${role}`;
     const b = document.createElement('div');
     b.className = `bubble ${role}`;
-    b.textContent = text;
+    if (role === 'assistant') {
+      b.innerHTML = renderMarkdown(text);
+    } else {
+      b.textContent = text;
+    }
     row.appendChild(b);
     chatEl.appendChild(row);
     scroll();
@@ -232,7 +515,7 @@
     chatEl.scrollTop = chatEl.scrollHeight;
   }
 
-  // ── WebSocket ───────────────────────────────────────────────────────────────
+  // ── WebSocket ────────────────────────────────────────────────────────────────
 
   function connect() {
     ws = new WebSocket(WS_URL);
@@ -242,7 +525,6 @@
     });
 
     ws.addEventListener('message', ({ data }) => {
-      // Log every raw frame so we can see exactly what the server sends
       let msg;
       try {
         msg = JSON.parse(data);
@@ -269,10 +551,14 @@
           const delta = chunk.delta ?? '';
           if (!delta) return;
           streamTxt += delta;
+          // Suppress while text looks like a compact function-call JSON
           const leading = streamTxt.trimStart();
           if (leading.startsWith('{') && leading.length <= 512) return;
           hideTyping();
-          if (!streamEl) { streamEl = makeBubble('assistant', ''); }
+          if (!streamEl) {
+            streamEl = makeBubble('assistant', '');
+            streamEl.classList.add('streaming');
+          }
           streamEl.textContent = streamTxt;
           scroll();
         }
@@ -295,6 +581,9 @@
           streamEl?.closest('.row')?.remove();
         } else if (streamTxt) {
           if (!streamEl) streamEl = makeBubble('assistant', streamTxt);
+          // Render markdown on the completed response
+          streamEl.classList.remove('streaming');
+          streamEl.innerHTML = renderMarkdown(streamTxt);
           history.push(uiMsg('assistant', streamTxt));
         }
         streamEl = null;
@@ -313,7 +602,7 @@
     ws.addEventListener('error', (e) => console.error('[ws] error', e));
   }
 
-  // ── Send ────────────────────────────────────────────────────────────────────
+  // ── Send ─────────────────────────────────────────────────────────────────────
 
   function shortId() {
     return Math.random().toString(36).slice(2, 10);
@@ -342,7 +631,6 @@
     streamEl = null;
     streamTxt = '';
 
-    // Protocol: cf_agent_use_chat_request with body double-encoded as a JSON string
     currentRequestId = shortId();
     ws.send(JSON.stringify({
       type: 'cf_agent_use_chat_request',
@@ -365,7 +653,28 @@
     val ? showTyping() : hideTyping();
   }
 
-  // ── Controls ────────────────────────────────────────────────────────────────
+  // ── Content-type pills ───────────────────────────────────────────────────────
+
+  const STARTERS = {
+    'case-study':
+      'I need a technical case study. Product: [PRODUCT NAME]. Customer: [COMPANY / INDUSTRY]. Key outcome: [METRIC]. Target reader: [ROLE].',
+    'sales-brief':
+      'I need a sales enablement brief for [PRODUCT NAME] targeting [AUDIENCE — e.g., mid-market IT directors]. Top differentiators vs. [COMPETITOR]: [LIST]. Desired outcome: help reps close faster.',
+    'event-messaging':
+      'I need event messaging for [EVENT NAME]. Audience: [AUDIENCE]. Theme: [THEME]. Desired action after the event: [CTA].',
+  };
+
+  document.querySelectorAll('.pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const starter = STARTERS[pill.dataset.starter];
+      if (!starter) return;
+      inputEl.value = starter;
+      inputEl.dispatchEvent(new Event('input'));
+      inputEl.focus();
+    });
+  });
+
+  // ── Controls ──────────────────────────────────────────────────────────────────
 
   sendBtn.addEventListener('click', send);
 
@@ -387,7 +696,6 @@
     chatEl.innerHTML = '';
     setThinking(false);
 
-    // Tell the Durable Object to wipe its persisted message history
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'cf_agent_chat_clear' }));
     }
@@ -395,7 +703,7 @@
     welcome();
   });
 
-  // ── Welcome ─────────────────────────────────────────────────────────────────
+  // ── Welcome ───────────────────────────────────────────────────────────────────
 
   const WELCOME = `Welcome! I help B2B tech sales and marketing teams produce three types of go-to-market content:
 
@@ -411,7 +719,7 @@ Before I write anything I'll confirm your target audience, the product or featur
     makeBubble('assistant', WELCOME);
   }
 
-  // ── Init ────────────────────────────────────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────────────
   welcome();
   connect();
 </script>
