@@ -455,12 +455,26 @@
         continue;
       }
 
-      // Ordered list
+      // Ordered list — tolerates blank lines between items
       if (/^\d+\. /.test(line)) {
         const items = [];
-        while (i < lines.length && /^\d+\. /.test(lines[i])) {
-          items.push(`<li>${inline(lines[i].replace(/^\d+\. /, ''))}</li>`);
-          i++;
+        while (i < lines.length) {
+          const l = lines[i];
+          if (/^\d+\. /.test(l)) {
+            items.push(`<li>${inline(l.replace(/^\d+\. /, ''))}</li>`);
+            i++;
+          } else if (!l.trim()) {
+            // peek past blank lines — keep collecting if next non-blank is also a list item
+            let peek = i + 1;
+            while (peek < lines.length && !lines[peek].trim()) peek++;
+            if (peek < lines.length && /^\d+\. /.test(lines[peek])) {
+              i = peek;
+            } else {
+              break;
+            }
+          } else {
+            break;
+          }
         }
         out.push(`<ol>${items.join('')}</ol>`);
         continue;
